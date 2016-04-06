@@ -86,7 +86,7 @@ def create_patches(shapefilename, latitude, longitude, coords): #Create mpl_tool
 
     #Create patches with counts for each region
     hood_count = np.array([num_of_contained_points(i, city_points) for i in poly])
-    point_names = np.array([name_of_contained_points(i, poly, name) for i in city_points])
+    point_names = np.array([name_of_contained_points(i, poly, name) for i in all_points])
 
     maximum = hood_count.max()
     breaks = list(np.linspace(0., maximum-maximum%100, 9)) + [1e20]
