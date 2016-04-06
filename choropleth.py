@@ -5,7 +5,10 @@
 Creates a choropleth map from latitude/longitude data and binned shapefile. Each coordinate is assigned to a bin and each bin is assigned a color based on counts.
 General usage:
     import choropleth as ch
-    ch.choropleth(shapefilename, title, suptitle, savename, figwidth)
+    patch_count, patch_name, point_name = ch.choropleth(shapefilename, title, suptitle, savename, figwidth)
+
+This code breaks down for small samples (<100 counts per bin) due to hardcoded rounding in create_patches (breaks = list(np.linspace(0., maximum-maximum%100, 9)) + [1e20]).
+This can be fixed by setting a new modulus to round down by.
 '''
 
 import numpy as np
@@ -14,6 +17,10 @@ from shapely.prepared import prep
 from matplotlib.collections import PatchCollection
 from descartes import PolygonPatch
 import matplotlib.pyplot as plt
+
+def name_of_contained_points(city_point, apolygon, names):
+    contained = [names[i] for i in range(len(apolygon)) if prep(apolygon[i]).contains(city_point)]
+    return contained
 
 def num_of_contained_points(apolygon, city_points):
     contained = [i for i in city_points if prep(apolygon).contains(i)]
@@ -79,14 +86,15 @@ def create_patches(shapefilename, latitude, longitude, coords): #Create mpl_tool
 
     #Create patches with counts for each region
     hood_count = np.array([num_of_contained_points(i, city_points) for i in poly])
-    minimum = round(hood_count.min(), -3)
-    maximum = round(hood_count.max(), -3)
-    breaks = np.linspace(minimum, maximum, 9)
+    point_names = np.array([name_of_contained_points(i, poly, name) for i in city_points])
+
+    maximum = hood_count.max()
+    breaks = list(np.linspace(0., maximum-maximum%100, 9)) + [1e20]
 
     #Create bins for labeling colorbar
     jenk_bins = np.array([self_categorize(i, breaks) for i in hood_count])
 
-    return pc, jenk_bins,  m
+    return pc, jenk_bins,  m, breaks, hood_count, name, point_names
 
 def set_patchcolor(pc, cmap, jenk_bins): #Create colormap & set patch color through normalized patch counts
     jenk_norm = (jenk_bins - jenk_bins.min()) / (jenk_bins.max() - jenk_bins.min())
@@ -115,9 +123,10 @@ def plotter(pc, m, coords, cmap, breaks, figwidth, title, suptitle, savename): #
     fig.suptitle(suptitle, fontsize=15, fontweight='bold', y=0.92)
     plt.savefig(savename, dpi=100, frameon=False, bbox_inches='tight', pad_inches=0.5, facecolor='#F2F2F2')
 
-def choropleth(shapefilename, latitude, longitude, title, suptitle, savename, figwidth): #Outputs choropleth map
+def choropleth(shapefilename, cmap, latitude, longitude, title, suptitle, savename, figwidth): #Outputs choropleth map
     boundaries = open_shape(shapefilename)
-    pc, color_bins, m = create_patches(shapefilename, latitude,
+    pc, color_bins, m, breaks, hood_count, name, point_names  = create_patches(shapefilename, latitude,
                                                     longitude, boundaries)
     pc = set_patchcolor(pc, cmap, color_bins)
-    plotter(pc, m, boundaries, cmap, labels, figwidth, title, suptitle, savename)
+    plotter(pc, m, boundaries, cmap, breaks, figwidth, title, suptitle, savename)
+    return hood_count, name, point_names
